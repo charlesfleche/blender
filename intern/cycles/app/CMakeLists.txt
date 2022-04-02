@@ -87,24 +87,28 @@ if(WITH_CYCLES_STANDALONE)
   target_link_libraries(cycles ${LIBRARIES})
   cycles_target_link_libraries(cycles)
 
-  # USD static linking
+  if(WITH_USD)
+    add_definitions(-DWITH_USD)
 
-  if(WIN32)
-    set_property(TARGET cycles APPEND_STRING PROPERTY INTERFACE_LINK_OPTIONS "$<$<CONFIG:Debug>:/WHOLEARCHIVE:${USD_DEBUG_LIB}>")
-    set_property(TARGET cycles APPEND_STRING PROPERTY INTERFACE_LINK_OPTIONS "$<$<CONFIG:Release>:/WHOLEARCHIVE:${USD_RELEASE_LIB}>")
-    set_property(TARGET cycles APPEND_STRING PROPERTY INTERFACE_LINK_OPTIONS "$<$<CONFIG:RelWithDebInfo>:/WHOLEARCHIVE:${USD_RELEASE_LIB}>")
-    set_property(TARGET cycles APPEND_STRING PROPERTY INTERFACE_LINK_OPTIONS "$<$<CONFIG:MinSizeRel>:/WHOLEARCHIVE:${USD_RELEASE_LIB}>")
-  endif()
+    # USD static linking
 
-  # Source: https://github.com/PixarAnimationStudios/USD/blob/master/BUILDING.md#linking-whole-archives
-  if(WIN32)
-    target_link_libraries(cycles ${USD_LIBRARIES})
-  elseif(APPLE)
-    target_link_libraries(cycles -Wl,-force_load ${USD_LIBRARIES})
-  elseif(UNIX)
-    target_link_libraries(cycles "-Wl,--whole-archive ${USD_LIBRARIES} -Wl,--no-whole-archive ${TBB_LIBRARIES}")
-  else()
-    message(FATAL_ERROR "Unknown how to link USD with your compiler ${CMAKE_CXX_COMPILER_ID}")
+    if(WIN32)
+      set_property(TARGET cycles APPEND_STRING PROPERTY INTERFACE_LINK_OPTIONS "$<$<CONFIG:Debug>:/WHOLEARCHIVE:${USD_DEBUG_LIB}>")
+      set_property(TARGET cycles APPEND_STRING PROPERTY INTERFACE_LINK_OPTIONS "$<$<CONFIG:Release>:/WHOLEARCHIVE:${USD_RELEASE_LIB}>")
+      set_property(TARGET cycles APPEND_STRING PROPERTY INTERFACE_LINK_OPTIONS "$<$<CONFIG:RelWithDebInfo>:/WHOLEARCHIVE:${USD_RELEASE_LIB}>")
+      set_property(TARGET cycles APPEND_STRING PROPERTY INTERFACE_LINK_OPTIONS "$<$<CONFIG:MinSizeRel>:/WHOLEARCHIVE:${USD_RELEASE_LIB}>")
+    endif()
+
+    # Source: https://github.com/PixarAnimationStudios/USD/blob/master/BUILDING.md#linking-whole-archives
+    if(WIN32)
+      target_link_libraries(cycles ${USD_LIBRARIES})
+    elseif(APPLE)
+      target_link_libraries(cycles -Wl,-force_load ${USD_LIBRARIES})
+    elseif(UNIX)
+      target_link_libraries(cycles "-Wl,--whole-archive ${USD_LIBRARIES} -Wl,--no-whole-archive ${TBB_LIBRARIES}")
+    else()
+      message(FATAL_ERROR "Unknown how to link USD with your compiler ${CMAKE_CXX_COMPILER_ID}")
+    endif()
   endif()
 
   target_link_libraries(cycles ${TBB_LIBRARIES})

@@ -692,6 +692,10 @@ void Mesh::pack_shaders(Scene *scene, uint *tri_shader)
   size_t triangles_size = num_triangles();
   int *shader_ptr = shader.data();
 
+  if (!shader_ptr) {
+    return;
+  }
+
   for (size_t i = 0; i < triangles_size; i++) {
     if (shader_ptr[i] != last_shader || last_smooth != smooth[i]) {
       last_shader = shader_ptr[i];

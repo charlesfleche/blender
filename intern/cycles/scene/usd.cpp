@@ -21,6 +21,7 @@
 
 #ifdef WITH_USD
 
+#  include <pxr/base/plug/registry.h>
 #  include <pxr/usd/usd/prim.h>
 #  include <pxr/usd/usd/primRange.h>
 #  include <pxr/usd/usd/stage.h>
@@ -41,21 +42,37 @@ NODE_DEFINE(USDProcedural)
 
 USDProcedural::USDProcedural() : Procedural(get_node_type())
 {
+  static bool plugin_path_registered = false;
+  if (plugin_path_registered) {
+    return;
+  }
+  plugin_path_registered = true;
+  // TODO: compute plugin path
+  pxr::PlugRegistry::GetInstance().RegisterPlugins(
+      "/home/charles/blender-git/lib/linux_x86_64/usd/lib/usd");
 }
 
 USDProcedural::~USDProcedural()
 {
 }
+#  if 0
+template<typename tUsd> struct Trait {
+  typedef void CyclesType;
+};
 
-template<typename tIn, typename tOut> tOut convert(const tIn &);
+template<> struct Trait<GfVec3f> {
+  typedef float3 CyclesType;
+};
+
+template<typename tIn, typename tOut> tOut convert(const tIn &, tOut &);
 
 template<typename tIn, typename tOut, typename = std::enable_if_t<std::is_same<tIn, tOut>::value>>
-int convert(const int &val)
+void convert(const tIn &in, tOut &out)
 {
-  return val;
+  return out = in;
 }
 
-template<> float3 convert(const GfVec3f &vec)
+template<typename tIn, typename tOut> void convert(const tIn &in, tOut &out)
 {
   return make_float3(vec[0], vec[1], vec[2]);
 }
@@ -67,10 +84,130 @@ template<typename tIn, typename tOut> void convert(const VtArray<tIn> &vt, array
     arr.push_back_slow(convert<tIn, tOut>(val));
   }
 }
+#  endif
+
+static void convert(const GfVec3f &in, float3 &out)
+{
+  for (size_t i = 0; i < GfVec3f::dimension; ++i) {
+    out[i] = in[i];
+  }
+}
+
+static void convert(const VtArray<GfVec3f> &in, array<float3> &out)
+{
+  out.resize(in.size());
+  for (size_t i = 0; i < in.size(); ++i) {
+    const auto &in_vec = in[i];
+    auto &out_vec = out[i];
+    convert(in[i], out[i]);
+    auto test = out;
+  }
+}
+
+static void convert(const VtArray<int> &in, array<int> &out)
+{
+  // TODO: memcopy
+  out.resize(in.size());
+  for (size_t i = 0; i < in.size(); ++i) {
+    out[i] = in[i];
+  }
+}
+#  if 1
+static void read(const UsdGeomMesh &mesh, Mesh *geometry)
+{
+  // TODO: handle other mesh types
+  geometry->set_subdivision_type(Mesh::SubdivisionType::SUBDIVISION_CATMULL_CLARK);
+
+  // Verts
+
+  VtArray<GfVec3f> points;
+  if (!mesh.GetPointsAttr().Get(&points)) {
+    // TODO: log error
+    return;
+  }
+
+  array<float3> verts;
+  convert(points, verts);
+
+  geometry->set_verts(verts);
+
+  // Triangles
+
+  VtArray<int> usd_triangles;
+  if (!mesh.GetFaceVertexIndicesAttr().Get(&usd_triangles)) {
+    // TODO: log error
+    return;
+  }
+
+  array<int> triangles;
+  convert(usd_triangles, triangles);
+
+  geometry->set_triangles(triangles);
+
+  //  geometry->set_
+}
+#  else
+
+static void read(const UsdGeomMesh &, Mesh *geometry)
+{
+  array<float3> verts;
+  verts.push_back_slow(make_float3(0, 0, 0));
+  verts.push_back_slow(make_float3(1, 0, 0));
+  verts.push_back_slow(make_float3(1, 1, 0));
+  geometry->set_verts(verts);
+
+  array<int> triangles;
+  triangles.push_back_slow(0);
+  triangles.push_back_slow(1);
+  triangles.push_back_slow(2);
+  geometry->set_triangles(triangles);
+}
+#  endif
+
+static auto *generate_node(Scene *scene, Progress &, const UsdGeomMesh &mesh)
+{
+  auto geometry = scene->create_node<Mesh>();
+  geometry->name = mesh.GetPrim().GetPath().GetString();
+
+  read(mesh, geometry);
+
+  return geometry;
+}
+
+static Object *generate_node(Scene *scene, Progress &progress, const UsdPrim &prim)
+{
+  // TODO: assert valid mesh
+  Geometry *geometry = nullptr;
+
+  if (prim.IsA<UsdGeomMesh>()) {
+    geometry = generate_node(scene, progress, UsdGeomMesh(prim));
+  }
+
+  if (!geometry) {
+    return nullptr;
+  }
+
+  auto object = scene->create_node<Object>();
+  //    object->set_owner(this); // TODO: where is the Generator stored ?
+  object->set_geometry(geometry);
+  object->name = geometry->name;
+
+  return object;
+}
 
 void USDProcedural::generate(Scene *scene, Progress &progress)
 {
+  auto plugins = PlugRegistry::GetInstance().GetAllPlugins();
   auto stage = UsdStage::Open(filepath.c_str());
+
+  if (!stage) {
+    // TODO: log error
+    return;
+  }
+
+  for (const auto &prim : stage->Traverse()) {
+    generate_node(scene, progress, prim);
+  }
 
   //  for (auto prim : stage->Traverse()) {
   //    UsdGeomMesh usd_mesh(prim);
