@@ -198,6 +198,9 @@ class Scene : public NodeOwner {
   /* Optional name. Is used for logging and reporting. */
   string name;
 
+  /* Maps from Light group names to their pass ID. */
+  map<ustring, int> lightgroups;
+
   /* data */
   BVH *bvh;
   Camera *camera;
