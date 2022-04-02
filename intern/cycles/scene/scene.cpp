@@ -23,6 +23,7 @@
 #include "scene/shader.h"
 #include "scene/svm.h"
 #include "scene/tables.h"
+#include "scene/usd.h"
 #include "scene/volume.h"
 #include "session/session.h"
 
@@ -799,6 +800,19 @@ template<> AlembicProcedural *Scene::create_node<AlembicProcedural>()
 #endif
 }
 
+template<> USDProcedural *Scene::create_node<USDProcedural>()
+{
+#ifdef WITH_USD
+  USDProcedural *node = new USDProcedural();
+  node->set_owner(this);
+  procedurals.push_back(node);
+  procedural_manager->tag_update();
+  return node;
+#else
+  return nullptr;
+#endif
+}
+
 template<> Pass *Scene::create_node<Pass>()
 {
   Pass *node = new Pass();
@@ -893,6 +907,15 @@ template<> void Scene::delete_node_impl(Procedural *node)
 template<> void Scene::delete_node_impl(AlembicProcedural *node)
 {
 #ifdef WITH_ALEMBIC
+  delete_node_impl(static_cast<Procedural *>(node));
+#else
+  (void)node;
+#endif
+}
+
+template<> void Scene::delete_node_impl(USDProcedural *node)
+{
+#ifdef WITH_USD
   delete_node_impl(static_cast<Procedural *>(node));
 #else
   (void)node;

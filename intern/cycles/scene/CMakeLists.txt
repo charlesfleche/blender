@@ -43,6 +43,7 @@ set(SRC
   stats.cpp
   svm.cpp
   tables.cpp
+  usd.cpp
   volume.cpp
 )
 
@@ -81,6 +82,7 @@ set(SRC_HEADERS
   stats.h
   svm.h
   tables.h
+  usd.h
   volume.h
 )
 
@@ -138,6 +140,16 @@ if(WITH_ALEMBIC)
   list(APPEND LIB
     ${ALEMBIC_LIBRARIES}
   )
+endif()
+
+if(WITH_USD)
+  add_definitions(-DWITH_USD)
+  list(APPEND INC_SYS
+    ${USD_INCLUDE_DIR}
+  )
+#  list(APPEND LIB
+#    ${USD_LIBRARY}
+#  )
 endif()
 
 if(WITH_NANOVDB)

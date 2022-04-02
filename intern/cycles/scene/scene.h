@@ -52,6 +52,7 @@ class BakeManager;
 class BakeData;
 class RenderStats;
 class SceneUpdateStats;
+class USDProcedural;
 class Volume;
 
 /* Scene Device Data */
@@ -368,6 +369,8 @@ template<> Shader *Scene::create_node<Shader>();
 
 template<> AlembicProcedural *Scene::create_node<AlembicProcedural>();
 
+template<> USDProcedural *Scene::create_node<USDProcedural>();
+
 template<> Pass *Scene::create_node<Pass>();
 
 template<> void Scene::delete_node_impl(Light *node);
@@ -391,6 +394,8 @@ template<> void Scene::delete_node_impl(Shader *node);
 template<> void Scene::delete_node_impl(Procedural *node);
 
 template<> void Scene::delete_node_impl(AlembicProcedural *node);
+
+template<> void Scene::delete_node_impl(USDProcedural *node);
 
 template<> void Scene::delete_node_impl(Pass *node);
 

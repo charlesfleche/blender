@@ -22,6 +22,7 @@
 #include "scene/shader.h"
 #include "scene/shader_graph.h"
 #include "scene/shader_nodes.h"
+#include "scene/usd.h"
 
 #include "subd/patch.h"
 #include "subd/split.h"
@@ -215,6 +216,16 @@ static void xml_read_alembic(XMLReadState &state, xml_node graph_node)
       }
     }
   }
+}
+#endif
+
+/* USD */
+
+#ifdef WITH_USD
+static void xml_read_usd(XMLReadState &state, xml_node graph_node)
+{
+  USDProcedural *proc = state.scene->create_node<USDProcedural>();
+  xml_read_node(state, proc, graph_node);
 }
 #endif
 
@@ -676,6 +687,11 @@ static void xml_read_scene(XMLReadState &state, xml_node scene_node)
 #ifdef WITH_ALEMBIC
     else if (string_iequals(node.name(), "alembic")) {
       xml_read_alembic(state, node);
+    }
+#endif
+#ifdef WITH_USD
+    else if (string_iequals(node.name(), "usd")) {
+      xml_read_usd(state, node);
     }
 #endif
     else

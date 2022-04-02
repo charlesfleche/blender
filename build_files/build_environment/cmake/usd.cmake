@@ -25,6 +25,7 @@ set(USD_EXTRA_ARGS
   -DBUILD_SHARED_LIBS=OFF
   -DPYTHON_EXECUTABLE=${PYTHON_BINARY}
   -DPXR_BUILD_MONOLITHIC=ON
+  #-DPXR_MALLOC_LIBRARY=/usr/lib/x86_64-linux-gnu/libjemalloc.so
 
   # The PXR_BUILD_USD_TOOLS argument is patched-in by usd.diff. An upstream pull request
   # can be found at https://github.com/PixarAnimationStudios/USD/pull/1048.
@@ -37,11 +38,13 @@ set(USD_EXTRA_ARGS
 )
 
 ExternalProject_Add(external_usd
-  URL file://${PACKAGE_DIR}/${USD_FILE}
+  # URL file://${PACKAGE_DIR}/${USD_FILE}
+  GIT_REPOSITORY /home/charles/src/github/PixarAnimationStudios/USD
+  GIT_TAG patched-for-blender
   DOWNLOAD_DIR ${DOWNLOAD_DIR}
   URL_HASH ${USD_HASH_TYPE}=${USD_HASH}
   PREFIX ${BUILD_DIR}/usd
-  PATCH_COMMAND ${PATCH_CMD} -p 1 -d ${BUILD_DIR}/usd/src/external_usd < ${PATCH_DIR}/usd.diff
+  # PATCH_COMMAND ${PATCH_CMD} -p 1 -d ${BUILD_DIR}/usd/src/external_usd < ${PATCH_DIR}/usd.diff
   CMAKE_ARGS -DCMAKE_INSTALL_PREFIX=${LIBDIR}/usd -Wno-dev ${DEFAULT_CMAKE_FLAGS} ${USD_EXTRA_ARGS}
   INSTALL_DIR ${LIBDIR}/usd
 )
