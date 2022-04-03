@@ -44,7 +44,7 @@ NODE_DEFINE(USDProcedural)
   return type;
 }
 
-const Transform &usd_to_cycles_axis_conversion_transform(const TfRefPtr<UsdStage> &stage)
+static const Transform &usd_to_cycles_axis_conversion_transform(const TfRefPtr<UsdStage> &stage)
 {
   // Make and cache the axis transforms
 
@@ -84,51 +84,9 @@ const Transform &usd_to_cycles_axis_conversion_transform(const TfRefPtr<UsdStage
   return from_usd_right_handed_unknown_up;
 }
 
-USDProcedural::USDProcedural() : Procedural(get_node_type())
-{
-  static bool is_initialized = false;
-  if (is_initialized) {
-    return;
-  }
-  is_initialized = true;
-  // TODO: compute plugin path
-  pxr::PlugRegistry::GetInstance().RegisterPlugins(
-      "/home/charles/blender-git/lib/linux_x86_64/usd/lib/usd");
-}
-
-USDProcedural::~USDProcedural()
-{
-}
-#  if 0
-template<typename tUsd> struct Trait {
-  typedef void CyclesType;
-};
-
-template<> struct Trait<GfVec3f> {
-  typedef float3 CyclesType;
-};
-
-template<typename tIn, typename tOut> tOut convert(const tIn &, tOut &);
-
-template<typename tIn, typename tOut, typename = std::enable_if_t<std::is_same<tIn, tOut>::value>>
-void convert(const tIn &in, tOut &out)
-{
-  return out = in;
-}
-
-template<typename tIn, typename tOut> void convert(const tIn &in, tOut &out)
-{
-  return make_float3(vec[0], vec[1], vec[2]);
-}
-
-template<typename tIn, typename tOut> void convert(const VtArray<tIn> &vt, array<tOut> &arr)
-{
-  arr.clear();
-  for (const auto &val : vt) {
-    arr.push_back_slow(convert<tIn, tOut>(val));
-  }
-}
-#  endif
+//
+// USD to Cycles types conversions
+//
 
 static void convert(const GfVec3f &in, float3 &out)
 {
@@ -140,21 +98,6 @@ static void convert(const GfVec3f &in, float3 &out)
 static void convert(const GfMatrix4d &in, Transform &out)
 {
   const auto data = in.data();
-
-  //  out.x[0] = static_cast<float>(data[0]);
-  //  out.x[1] = static_cast<float>(data[1]);
-  //  out.x[2] = static_cast<float>(data[2]);
-  //  out.x[3] = static_cast<float>(data[3]);
-
-  //  out.y[0] = static_cast<float>(data[4]);
-  //  out.y[1] = static_cast<float>(data[5]);
-  //  out.y[2] = static_cast<float>(data[6]);
-  //  out.y[3] = static_cast<float>(data[7]);
-
-  //  out.z[0] = static_cast<float>(data[8]);
-  //  out.z[1] = static_cast<float>(data[9]);
-  //  out.z[2] = static_cast<float>(data[10]);
-  //  out.z[3] = static_cast<float>(data[11]);
 
   out.x[0] = static_cast<float>(data[0]);
   out.x[1] = static_cast<float>(data[4]);
@@ -172,39 +115,14 @@ static void convert(const GfMatrix4d &in, Transform &out)
   out.z[3] = static_cast<float>(data[14]);
 }
 
-static void convert(const VtArray<GfVec3f> &in, array<float3> &out)
-{
-  out.resize(in.size());
-  for (size_t i = 0; i < in.size(); ++i) {
-    const auto &in_vec = in[i];
-    auto &out_vec = out[i];
-    convert(in[i], out[i]);
-    auto test = out;
-  }
-}
+//
+// Reading data from USD
+//
 
-static auto from_usd_right_hand_z_up_to_cycles_left_hand_y_up()
-{
-  GfMatrix4d mat;
-  mat.SetIdentity();
-  mat.SetScale(GfVec3d(1, 1, -1));
-  mat.SetRotateOnly(GfRotation({1, 0, 0}, -90));
-  return mat;
-}
-
-static void convert(const VtArray<int> &in, array<int> &out)
-{
-  // TODO: memcopy
-  out.resize(in.size());
-  for (size_t i = 0; i < in.size(); ++i) {
-    out[i] = in[i];
-  }
-}
-#  if 1
 static void read(const UsdGeomMesh &mesh, Mesh *geometry)
 {
   // TODO: handle other mesh types
-  geometry->set_subdivision_type(Mesh::SubdivisionType::SUBDIVISION_CATMULL_CLARK);
+  geometry->set_subdivision_type(Mesh::SubdivisionType::SUBDIVISION_NONE);
 
   // Verts
 
@@ -222,7 +140,6 @@ static void read(const UsdGeomMesh &mesh, Mesh *geometry)
     auto point = points[i];
     convert(point, verts[i]);
   }
-  //  convert(points, verts);
 
   geometry->set_verts(verts);
 
@@ -232,37 +149,20 @@ static void read(const UsdGeomMesh &mesh, Mesh *geometry)
   int face_index_offset = 0;
   for (auto c : fvcs) {
     // TODO: handle log face with less than 3 points
-    auto first_point_index = fvis[face_index_offset];
     for (int second_point_offset = 1, third_point_offset = 2; third_point_offset < c;
          ++second_point_offset, ++third_point_offset) {
-      auto a = fvis[face_index_offset];
-      auto b = fvis[face_index_offset + second_point_offset];
-      auto c = fvis[face_index_offset + third_point_offset];
-      triangles.push_back_slow(a);
-      triangles.push_back_slow(b);
-      triangles.push_back_slow(c);
+      triangles.push_back_slow(fvis[face_index_offset]);
+      triangles.push_back_slow(fvis[face_index_offset + second_point_offset]);
+      triangles.push_back_slow(fvis[face_index_offset + third_point_offset]);
     }
     face_index_offset += c;
   }
   geometry->set_triangles(triangles);
 }
-#  else
 
-static void read(const UsdGeomMesh &, Mesh *geometry)
-{
-  array<float3> verts;
-  verts.push_back_slow(make_float3(0, 0, 0));
-  verts.push_back_slow(make_float3(1, 0, 0));
-  verts.push_back_slow(make_float3(1, 1, 0));
-  geometry->set_verts(verts);
-
-  array<int> triangles;
-  triangles.push_back_slow(0);
-  triangles.push_back_slow(1);
-  triangles.push_back_slow(2);
-  geometry->set_triangles(triangles);
-}
-#  endif
+//
+// Cycles Node factories
+//
 
 static auto *generate_node(Scene *scene, Progress &, const UsdGeomMesh &mesh)
 {
@@ -292,7 +192,6 @@ static Object *generate_node(Scene *scene,
   }
 
   auto object = scene->create_node<Object>();
-  //    object->set_owner(this); // TODO: where is the Generator stored ?
   object->set_geometry(geometry);
   object->name = geometry->name;
 
@@ -303,6 +202,26 @@ static Object *generate_node(Scene *scene,
   object->set_tfm(axis_conversion_tfm * tfm);
 
   return object;
+}
+
+//
+// USDProcedural
+//
+
+USDProcedural::USDProcedural() : Procedural(get_node_type())
+{
+  static bool is_initialized = false;
+  if (is_initialized) {
+    return;
+  }
+  is_initialized = true;
+  // TODO: compute plugin path
+  pxr::PlugRegistry::GetInstance().RegisterPlugins(
+      "/home/charles/blender-git/lib/linux_x86_64/usd/lib/usd");
+}
+
+USDProcedural::~USDProcedural()
+{
 }
 
 void USDProcedural::generate(Scene *scene, Progress &progress)
@@ -319,40 +238,11 @@ void USDProcedural::generate(Scene *scene, Progress &progress)
 
   UsdGeomXformCache cache;
   for (const auto &prim : stage->Traverse()) {
-    generate_node(scene, progress, cache, axis_conversion_tfm, prim);
+    auto node = generate_node(scene, progress, cache, axis_conversion_tfm, prim);
+    if (node) {
+      node->set_owner(this);
+    }
   }
-
-  //  for (auto prim : stage->Traverse()) {
-  //    UsdGeomMesh usd_mesh(prim);
-  //    if (usd_mesh) {
-  //      VtArray<GfVec3f> points;
-  //      if (!usd_mesh.GetPointsAttr().Get(&points))
-  //        continue;
-
-  //      VtArray<int> face_vertex_indices;
-  //      if (!usd_mesh.GetFaceVertexIndicesAttr().Get(&face_vertex_indices))
-  //        continue;
-
-  //      VtArray<int> face_vertex_counts;
-  //      if (!usd_mesh.GetFaceVertexCountsAttr().Get(&face_vertex_counts))
-  //        continue;
-
-  //      auto mesh = scene->create_node<Mesh>();
-
-  //      array<float3> P_array;
-  //      convert(points, P_array);
-  //      mesh->set_verts(P_array);
-
-  //      array<int> verts;
-  //      //      convert(face_vertex_indices, verts);
-
-  //      array<int> nverts;
-  //      //      convert(face_vertex_counts, nverts);
-
-  //      auto object = scene->create_node<Object>();
-  //      object->set_geometry(mesh);
-  //    }
-  //  }
 }
 
 CCL_NAMESPACE_END

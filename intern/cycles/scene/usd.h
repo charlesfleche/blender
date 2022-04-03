@@ -24,7 +24,7 @@ class USDProcedural : public Procedural {
   USDProcedural();
   ~USDProcedural();
 
-  void generate(Scene *scene, Progress &progress);
+  void generate(Scene *scene, Progress &progress) override;
 };
 
 CCL_NAMESPACE_END
