@@ -157,8 +157,11 @@ static void read(const UsdGeomMesh &mesh, Mesh *geometry)
 
   // Verts
 
+  VtArray<int> fvcs;
+  VtArray<int> fvis;
   VtArray<GfVec3f> points;
-  if (!mesh.GetPointsAttr().Get(&points)) {
+  if (!mesh.GetPointsAttr().Get(&points) || !mesh.GetFaceVertexIndicesAttr().Get(&fvis) ||
+      !mesh.GetFaceVertexCountsAttr().Get(&fvcs)) {
     // TODO: log error
     return;
   }
@@ -170,18 +173,23 @@ static void read(const UsdGeomMesh &mesh, Mesh *geometry)
 
   // Triangles
 
-  VtArray<int> usd_triangles;
-  if (!mesh.GetFaceVertexIndicesAttr().Get(&usd_triangles)) {
-    // TODO: log error
-    return;
-  }
-
   array<int> triangles;
-  convert(usd_triangles, triangles);
-
+  int face_index_offset = 0;
+  for (auto c : fvcs) {
+    // TODO: handle log face with less than 3 points
+    auto first_point_index = fvis[face_index_offset];
+    for (int second_point_offset = 1, third_point_offset = 2; third_point_offset < c;
+         ++second_point_offset, ++third_point_offset) {
+      auto a = fvis[face_index_offset];
+      auto b = fvis[face_index_offset + second_point_offset];
+      auto c = fvis[face_index_offset + third_point_offset];
+      triangles.push_back_slow(a);
+      triangles.push_back_slow(b);
+      triangles.push_back_slow(c);
+    }
+    face_index_offset += c;
+  }
   geometry->set_triangles(triangles);
-
-  //  geometry->set_
 }
 #  else
 
