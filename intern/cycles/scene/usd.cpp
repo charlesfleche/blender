@@ -229,7 +229,6 @@ USDProcedural::~USDProcedural()
 
 void USDProcedural::generate(Scene *scene, Progress &progress)
 {
-  auto plugins = PlugRegistry::GetInstance().GetAllPlugins();
   auto stage = UsdStage::Open(filepath.c_str());
 
   auto axis_conversion_tfm = usd_to_cycles_axis_conversion_transform(stage);
