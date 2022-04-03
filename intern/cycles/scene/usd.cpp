@@ -20,7 +20,8 @@
 #include <type_traits>
 
 #ifdef WITH_USD
-
+#  include <pxr/base/arch/fileSystem.h>
+#  include <pxr/base/arch/systemInfo.h>
 #  include <pxr/base/gf/matrix4d.h>
 #  include <pxr/base/gf/rotation.h>
 #  include <pxr/base/plug/registry.h>
@@ -215,9 +216,11 @@ USDProcedural::USDProcedural() : Procedural(get_node_type())
     return;
   }
   is_initialized = true;
-  // TODO: compute plugin path
-  pxr::PlugRegistry::GetInstance().RegisterPlugins(
-      "/home/charles/blender-git/lib/linux_x86_64/usd/lib/usd");
+
+  // TODO: needs a more robust, cross-platform way to register USD plugins path
+
+  const auto path = ArchNormPath(ArchGetExecutablePath() + "/../3.2/datafiles/usd");
+  pxr::PlugRegistry::GetInstance().RegisterPlugins(path);
 }
 
 USDProcedural::~USDProcedural()
