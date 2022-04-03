@@ -21,11 +21,13 @@
 
 #ifdef WITH_USD
 
+#  include <pxr/base/gf/matrix4d.h>
 #  include <pxr/base/plug/registry.h>
 #  include <pxr/usd/usd/prim.h>
 #  include <pxr/usd/usd/primRange.h>
 #  include <pxr/usd/usd/stage.h>
 #  include <pxr/usd/usdGeom/mesh.h>
+#  include <pxr/usd/usdGeom/xformCache.h>
 
 PXR_NAMESPACE_USING_DIRECTIVE
 
@@ -91,6 +93,41 @@ static void convert(const GfVec3f &in, float3 &out)
   for (size_t i = 0; i < GfVec3f::dimension; ++i) {
     out[i] = in[i];
   }
+}
+
+static void convert(const GfMatrix4d &in, Transform &out)
+{
+  const auto data = in.data();
+
+  //  out.x[0] = static_cast<float>(data[0]);
+  //  out.x[1] = static_cast<float>(data[1]);
+  //  out.x[2] = static_cast<float>(data[2]);
+  //  out.x[3] = static_cast<float>(data[3]);
+
+  //  out.y[0] = static_cast<float>(data[4]);
+  //  out.y[1] = static_cast<float>(data[5]);
+  //  out.y[2] = static_cast<float>(data[6]);
+  //  out.y[3] = static_cast<float>(data[7]);
+
+  //  out.z[0] = static_cast<float>(data[8]);
+  //  out.z[1] = static_cast<float>(data[9]);
+  //  out.z[2] = static_cast<float>(data[10]);
+  //  out.z[3] = static_cast<float>(data[11]);
+
+  out.x[0] = static_cast<float>(data[0]);
+  out.x[1] = static_cast<float>(data[4]);
+  out.x[2] = static_cast<float>(data[8]);
+  out.x[3] = static_cast<float>(data[12]);
+
+  out.y[0] = static_cast<float>(data[1]);
+  out.y[1] = static_cast<float>(data[5]);
+  out.y[2] = static_cast<float>(data[9]);
+  out.y[3] = static_cast<float>(data[13]);
+
+  out.z[0] = static_cast<float>(data[2]);
+  out.z[1] = static_cast<float>(data[6]);
+  out.z[2] = static_cast<float>(data[10]);
+  out.z[3] = static_cast<float>(data[14]);
 }
 
 static void convert(const VtArray<GfVec3f> &in, array<float3> &out)
@@ -174,7 +211,10 @@ static auto *generate_node(Scene *scene, Progress &, const UsdGeomMesh &mesh)
   return geometry;
 }
 
-static Object *generate_node(Scene *scene, Progress &progress, const UsdPrim &prim)
+static Object *generate_node(Scene *scene,
+                             Progress &progress,
+                             UsdGeomXformCache &cache,
+                             const UsdPrim &prim)
 {
   // TODO: assert valid mesh
   Geometry *geometry = nullptr;
@@ -192,6 +232,12 @@ static Object *generate_node(Scene *scene, Progress &progress, const UsdPrim &pr
   object->set_geometry(geometry);
   object->name = geometry->name;
 
+  const auto mat = cache.GetLocalToWorldTransform(prim);
+  Transform tfm;
+  convert(mat, tfm);
+
+  object->set_tfm(tfm);  // TODO: probably wrong orientation
+
   return object;
 }
 
@@ -205,8 +251,9 @@ void USDProcedural::generate(Scene *scene, Progress &progress)
     return;
   }
 
+  UsdGeomXformCache cache;
   for (const auto &prim : stage->Traverse()) {
-    generate_node(scene, progress, prim);
+    generate_node(scene, progress, cache, prim);
   }
 
   //  for (auto prim : stage->Traverse()) {
