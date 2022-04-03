@@ -22,11 +22,13 @@
 #ifdef WITH_USD
 
 #  include <pxr/base/gf/matrix4d.h>
+#  include <pxr/base/gf/rotation.h>
 #  include <pxr/base/plug/registry.h>
 #  include <pxr/usd/usd/prim.h>
 #  include <pxr/usd/usd/primRange.h>
 #  include <pxr/usd/usd/stage.h>
 #  include <pxr/usd/usdGeom/mesh.h>
+#  include <pxr/usd/usdGeom/metrics.h>
 #  include <pxr/usd/usdGeom/xformCache.h>
 
 PXR_NAMESPACE_USING_DIRECTIVE
@@ -42,13 +44,53 @@ NODE_DEFINE(USDProcedural)
   return type;
 }
 
+const Transform &usd_to_cycles_axis_conversion_transform(const TfRefPtr<UsdStage> &stage)
+{
+  // Make and cache the axis transforms
+
+  static bool initialized = false;
+  static Transform from_usd_right_handed_y_up;
+  static Transform from_usd_right_handed_z_up;
+  static Transform from_usd_right_handed_unknown_up;
+
+  if (!initialized) {
+    const auto xaxis = make_float3(1.0, 0.0, 0.0);
+    const auto scl = transform_scale(1.0, 1.0, -1.0);
+    const auto rot = transform_rotate(static_cast<float>(-M_PI_2), xaxis);
+
+    from_usd_right_handed_y_up = scl;
+    from_usd_right_handed_z_up = scl * rot;
+    from_usd_right_handed_unknown_up = transform_identity();
+
+    initialized = true;
+  }
+
+  // Select the transforms depending on the UsdStage up axis
+
+  auto upaxis = UsdGeomGetStageUpAxis(stage);
+
+  if (upaxis != "Y" && upaxis != "Z") {
+    upaxis = UsdGeomGetFallbackUpAxis();
+  }
+
+  if (upaxis == "Y") {
+    return from_usd_right_handed_y_up;
+  }
+
+  if (upaxis == "Z") {
+    return from_usd_right_handed_z_up;
+  }
+
+  return from_usd_right_handed_unknown_up;
+}
+
 USDProcedural::USDProcedural() : Procedural(get_node_type())
 {
-  static bool plugin_path_registered = false;
-  if (plugin_path_registered) {
+  static bool is_initialized = false;
+  if (is_initialized) {
     return;
   }
-  plugin_path_registered = true;
+  is_initialized = true;
   // TODO: compute plugin path
   pxr::PlugRegistry::GetInstance().RegisterPlugins(
       "/home/charles/blender-git/lib/linux_x86_64/usd/lib/usd");
@@ -141,6 +183,15 @@ static void convert(const VtArray<GfVec3f> &in, array<float3> &out)
   }
 }
 
+static auto from_usd_right_hand_z_up_to_cycles_left_hand_y_up()
+{
+  GfMatrix4d mat;
+  mat.SetIdentity();
+  mat.SetScale(GfVec3d(1, 1, -1));
+  mat.SetRotateOnly(GfRotation({1, 0, 0}, -90));
+  return mat;
+}
+
 static void convert(const VtArray<int> &in, array<int> &out)
 {
   // TODO: memcopy
@@ -166,8 +217,12 @@ static void read(const UsdGeomMesh &mesh, Mesh *geometry)
     return;
   }
 
-  array<float3> verts;
-  convert(points, verts);
+  array<float3> verts(points.size());
+  for (size_t i = 0; i < points.size(); ++i) {
+    auto point = points[i];
+    convert(point, verts[i]);
+  }
+  //  convert(points, verts);
 
   geometry->set_verts(verts);
 
@@ -222,6 +277,7 @@ static auto *generate_node(Scene *scene, Progress &, const UsdGeomMesh &mesh)
 static Object *generate_node(Scene *scene,
                              Progress &progress,
                              UsdGeomXformCache &cache,
+                             const Transform &axis_conversion_tfm,
                              const UsdPrim &prim)
 {
   // TODO: assert valid mesh
@@ -244,7 +300,7 @@ static Object *generate_node(Scene *scene,
   Transform tfm;
   convert(mat, tfm);
 
-  object->set_tfm(tfm);  // TODO: probably wrong orientation
+  object->set_tfm(axis_conversion_tfm * tfm);
 
   return object;
 }
@@ -254,6 +310,8 @@ void USDProcedural::generate(Scene *scene, Progress &progress)
   auto plugins = PlugRegistry::GetInstance().GetAllPlugins();
   auto stage = UsdStage::Open(filepath.c_str());
 
+  auto axis_conversion_tfm = usd_to_cycles_axis_conversion_transform(stage);
+
   if (!stage) {
     // TODO: log error
     return;
@@ -261,7 +319,7 @@ void USDProcedural::generate(Scene *scene, Progress &progress)
 
   UsdGeomXformCache cache;
   for (const auto &prim : stage->Traverse()) {
-    generate_node(scene, progress, cache, prim);
+    generate_node(scene, progress, cache, axis_conversion_tfm, prim);
   }
 
   //  for (auto prim : stage->Traverse()) {
